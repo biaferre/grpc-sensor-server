@@ -41,7 +41,7 @@ func main() {
 	go func() {
 		for d := range msgs {
 			log.Printf("Received a message: %s", d.Body)
-			// todo processing
+
 			fmt.Printf("Processing sensor data: %s\n", d.Body)
 		}
 	}()

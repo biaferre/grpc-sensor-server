@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v5.29.3
-// source: sensor.proto
+// source: sensor/sensor.proto
 
 package sensor
 
@@ -117,5 +117,5 @@ var Sensor_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "sensor.proto",
+	Metadata: "sensor/sensor.proto",
 }

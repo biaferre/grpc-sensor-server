@@ -2,10 +2,11 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
-	pb "github.com/biaferre/grpc-sensor-server/sensor"
+	pb "github.com/biaferre/grpc-sensor-server/sensor/pbs"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -18,12 +19,18 @@ func main() {
 	defer conn.Close()
 
 	client := pb.NewSensorClient(conn)
-	ctx, cancel := context.WithTimeout((context.Background()), 2*time.Second)
+	ctx, cancel := context.WithTimeout((context.Background()), 120*time.Second)
 	defer cancel()
 
 	startTime := time.Now()
+
+	var number string
+
+	log.Println("Client started, define a number of sensors: ")
+	fmt.Scanln(&number)
+
 	r, err := client.GetSensorData(ctx, &pb.SensorRequest{
-		RequestMessage: "Hey its bia",
+		RequestMessage: number,
 	})
 	endTime := time.Now()
 
@@ -32,5 +39,9 @@ func main() {
 	}
 	log.Printf("Response from server: AvgTemp: %f, MinTemp: %f, MaxTemp: %f, Err: %s",
 		r.AvgTemp, r.MinTemp, r.MaxTemp, r.Err)
+
+	for _, sensor := range r.Sensors {
+		log.Printf("Sensor ID: %s, Temperature: %s", sensor.SensorId, sensor.Temperature)
+	}
 	log.Println("Client finished successfully in:", endTime.Sub(startTime).Milliseconds(), "ms")
 }

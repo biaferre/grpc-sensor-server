@@ -5,11 +5,16 @@ message SensorRequest {
     string request_message = 1;
 }
 
+message SensorData {
+    int32 sensor_id = 1;
+    int32 temperature = 2;
+}
+
 message SensorResponse {
-    string sensor_id = 1;
-    float avg_temp = 2;
-    float max_temp = 3;
-    float min_temp = 4;
+    float avg_temp = 1;
+    float max_temp = 2;
+    float min_temp = 3;
+    repeated SensorData sensors = 4;
     string err = 5;
 }
 

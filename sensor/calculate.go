@@ -7,6 +7,9 @@ import (
 	"math/rand"
 	"sync"
 	"time"
+
+	pbs "github.com/biaferre/grpc-sensor-server/sensor/pbs"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 type SensorData struct {
@@ -96,4 +99,14 @@ func AggregateData(wg *sync.WaitGroup, sensorData []int, durations []time.Durati
 	}
 
 	return formatResults(sensorData)
+}
+
+func FormatResponse(rawResponse []byte) *pbs.SensorResponse {
+	response := &pbs.SensorResponse{}
+	err := protojson.Unmarshal(rawResponse, response)
+	if err != nil {
+		return &pbs.SensorResponse{Err: err.Error()}
+	}
+
+	return response
 }

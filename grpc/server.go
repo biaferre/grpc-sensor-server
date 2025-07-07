@@ -10,7 +10,6 @@ import (
 
 	pbs "github.com/biaferre/grpc-sensor-server/sensor/pbs"
 	"google.golang.org/grpc"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 type SensorServer struct {
@@ -26,17 +25,7 @@ func (s SensorServer) GetSensorData(ctx context.Context, req *pbs.SensorRequest)
 	}
 
 	var rawResponse = sensor.GenerateSensorData(&numSensors)
-	return formatResponse(rawResponse), nil
-}
-
-func formatResponse(rawResponse []byte) *pbs.SensorResponse {
-	response := &pbs.SensorResponse{}
-	err := protojson.Unmarshal(rawResponse, response)
-	if err != nil {
-		return &pbs.SensorResponse{Err: err.Error()}
-	}
-
-	return response
+	return sensor.FormatResponse(rawResponse), nil
 }
 
 func main() {

@@ -22,26 +22,32 @@ func main() {
 	ctx, cancel := context.WithTimeout((context.Background()), 120*time.Second)
 	defer cancel()
 
-	startTime := time.Now()
-
 	var number string
 
 	log.Println("Client started, define a number of sensors: ")
 	fmt.Scanln(&number)
 
+	startTime := time.Now()
+
 	r, err := client.GetSensorData(ctx, &pb.SensorRequest{
 		RequestMessage: number,
 	})
-	endTime := time.Now()
 
 	if err != nil {
 		log.Fatalf("Error calling GetSensorData: %v", err)
 	}
+
+	var errorMessage string
+	if r.Err != "" {
+		errorMessage = r.Err
+	} else {
+		errorMessage = "No error"
+	}
 	log.Printf("Response from server: AvgTemp: %f, MinTemp: %f, MaxTemp: %f, Err: %s",
-		r.AvgTemp, r.MinTemp, r.MaxTemp, r.Err)
+		r.AvgTemp, r.MinTemp, r.MaxTemp, errorMessage)
 
 	for _, sensor := range r.Sensors {
-		log.Printf("Sensor ID: %s, Temperature: %s", sensor.SensorId, sensor.Temperature)
+		log.Printf("Sensor ID: %d, Temperature: %d", sensor.SensorId, sensor.Temperature)
 	}
-	log.Println("Client finished successfully in:", endTime.Sub(startTime).Milliseconds(), "ms")
+	log.Println("RTT:", time.Since(startTime).Milliseconds(), "ms")
 }

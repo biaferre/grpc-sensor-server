@@ -8,7 +8,7 @@ import (
 
 func GenerateSensorData(numSensors *int) (s []byte) {
 	var wg sync.WaitGroup
-	var sensorData []int
+	var sensorData []SensorData
 
 	var durations []time.Duration
 	var ns int

@@ -17,49 +17,61 @@ type SensorData struct {
 	Temperature int32 `json:"temperature"`
 }
 
-func sensor(wg *sync.WaitGroup, ch chan int, numSensor int, duration time.Duration) int {
-	var data int
+func sensor(wg *sync.WaitGroup, ch chan SensorData, numSensor int, duration time.Duration) SensorData {
 	time.Sleep(duration)
 	defer wg.Done()
-	data = rand.Intn(100)
+
+	data := SensorData{
+		ID:          int32(numSensor),
+		Temperature: int32(rand.Intn(100)),
+	}
 	ch <- data
 
-	fmt.Println("Sensor ", numSensor, ": duration: ", duration, ", temperature:", data)
+	fmt.Println("Sensor ", numSensor, ": duration: ", duration, ", temperature:", data.Temperature)
 	return data
 }
 
-func startTimer() time.Time {
-	fmt.Println("START")
-	return time.Now()
+func AggregateData(wg *sync.WaitGroup, sensorData []SensorData, durations []time.Duration, numSensors int) (s []byte) {
+	wg.Add(numSensors)
+
+	sensorDataChan := make(chan SensorData, numSensors)
+
+	for i := 1; i <= numSensors; i++ {
+		go sensor(wg, sensorDataChan, i, durations[i-1])
+	}
+
+	wg.Wait()
+	close(sensorDataChan)
+
+	for value := range sensorDataChan {
+		sensorData = append(sensorData, value)
+	}
+
+	return formatResults(sensorData)
 }
 
-func endTimer(startTime time.Time) {
-	endTime := time.Now()
-	fmt.Println("THE END / duration:", endTime.Sub(startTime))
-}
-
-func formatResults(sensorData []int) (s []byte) {
-	var max = sensorData[0]
-	var min = sensorData[0]
+func formatResults(sensorData []SensorData) (s []byte) {
+	var max = sensorData[0].Temperature
+	var min = sensorData[0].Temperature
 	var avg = float32(0)
 
 	for _, data := range sensorData {
-		avg += float32(data)
-		if data > max {
-			max = data
+		avg += float32(data.Temperature)
+		if data.Temperature > max {
+			max = data.Temperature
 		}
-		if data < min {
-			min = data
+		if data.Temperature < min {
+			min = data.Temperature
 		}
 	}
 
 	avg /= float32(len(sensorData))
 
 	var sensors []SensorData
-	for i, data := range sensorData {
+	for _, data := range sensorData {
 		sensors = append(sensors, SensorData{
-			ID:          int32(i + 1),
-			Temperature: int32(data),
+			ID:          int32(data.ID),
+			Temperature: int32(data.Temperature),
 		})
 	}
 
@@ -78,27 +90,6 @@ func formatResults(sensorData []int) (s []byte) {
 	fmt.Println("Results:\n" + string(jsonBytes))
 
 	return jsonBytes
-}
-
-func AggregateData(wg *sync.WaitGroup, sensorData []int, durations []time.Duration, numSensors int) (s []byte) {
-	defer endTimer(startTimer())
-
-	wg.Add(numSensors)
-
-	sensorDataChan := make(chan int, numSensors)
-
-	for i := 1; i <= numSensors; i++ {
-		go sensor(wg, sensorDataChan, i, durations[i-1])
-	}
-
-	wg.Wait()
-	close(sensorDataChan)
-
-	for value := range sensorDataChan {
-		sensorData = append(sensorData, value)
-	}
-
-	return formatResults(sensorData)
 }
 
 func FormatResponse(rawResponse []byte) *pbs.SensorResponse {

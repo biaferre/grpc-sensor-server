@@ -14,97 +14,75 @@ func main() {
 	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
 	if err != nil {
 		log.Fatalf("Failed to connect to RabbitMQ: %v", err)
-		panic(err)
 	}
-
 	defer conn.Close()
 
 	ch, err := conn.Channel()
 	if err != nil {
 		log.Fatalf("Failed to open a channel: %v", err)
-		panic(err)
 	}
+	defer ch.Close()
 
 	q, err := ch.QueueDeclare(
 		"sensor_data",
-		false, // durable
-		false, // delete when unused
-		true,  // exclusive
-		false, // no-wait
-		nil,   // arguments
-	)
-
-	if err != nil {
-		log.Fatalf("Failed to declare a queue: %v", err)
-		panic(err)
-	}
-
-	err = ch.Qos(
-		1,     // prefetch count
-		0,     // prefetch size
-		false, // global
+		false,
+		false,
+		false, // not exclusive
+		false,
+		nil,
 	)
 	if err != nil {
-		log.Fatalf("Failed to set QoS: %v", err)
-		panic(err)
+		log.Fatalf("Failed to declare queue: %v", err)
 	}
 
 	msgs, err := ch.Consume(
-		q.Name, // queue name
-		"",     // consumer tag
-		true,   // auto-acknowledge
-		false,  // exclusive
-		false,  // no-local
-		false,  // no-wait
-		nil,    // arguments
+		q.Name,
+		"",
+		false, // manual ack
+		false,
+		false,
+		false,
+		nil,
 	)
-
 	if err != nil {
-		log.Fatalf("Failed to register a consumer: %v", err)
-		panic(err)
+		log.Fatalf("Failed to register consumer: %v", err)
 	}
+
+	log.Println("Server awaiting messages...")
 
 	forever := make(chan bool)
 
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
 		for d := range msgs {
 			n, err := strconv.Atoi(string(d.Body))
-			log.Panicln(err, "Failed to convert body to integer")
+			if err != nil {
+				log.Printf("Failure to convert: %v", err)
+				d.Nack(false, false)
+				continue
+			}
 
-			log.Printf(" [.] fib(%d)", n)
-			response := sensor.GenerateSensorData(&n)
+			result := sensor.GenerateSensorData(&n)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
 
 			err = ch.PublishWithContext(ctx,
-				"",        // exchange
-				d.ReplyTo, // routing key
-				false,     // mandatory
-				false,     // immediate
+				"",
+				d.ReplyTo,
+				false,
+				false,
 				amqp.Publishing{
 					ContentType:   "text/plain",
 					CorrelationId: d.CorrelationId,
-					Body:          []byte(strconv.Itoa(response)),
+					Body:          result,
 				})
-			log.Panicln(err, "Failed to publish a message")
+			if err != nil {
+				log.Printf("Failure to publishing: %v", err)
+			}
 
 			d.Ack(false)
 		}
 	}()
 
-	go func() {
-		for d := range msgs {
-			bodyStr := string(d.Body)
-			val, err := strconv.Atoi(bodyStr)
-			if err != nil {
-				log.Printf("Error converting message body to int: %v", err)
-				continue
-			}
-
-			sensor.GenerateSensorData(&val)
-		}
-	}()
-
-	log.Println("Successfully connected to RabbitMQ and waiting for messages...")
 	<-forever
 }

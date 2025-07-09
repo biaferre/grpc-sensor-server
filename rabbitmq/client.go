@@ -2,91 +2,95 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"log"
+	"math/big"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
+func randomString(l int) string {
+	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	result := make([]byte, l)
+	for i := range result {
+		nBig, _ := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
+		result[i] = letters[nBig.Int64()]
+	}
+	return string(result)
+}
+
 func main() {
 	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
 	if err != nil {
 		log.Fatalf("Failed to connect to RabbitMQ: %v", err)
-		panic(err)
 	}
 	defer conn.Close()
-
-	log.Println("Connected to RabbitMQ")
 
 	ch, err := conn.Channel()
 	if err != nil {
 		log.Fatalf("Failed to open a channel: %v", err)
-		panic(err)
 	}
-
 	defer ch.Close()
 
-	q, err := ch.QueueDeclare(
-		"",
+	replyQueue, err := ch.QueueDeclare(
+		"",    // name
 		false, // durable
-		false, // delete when unused
+		true,  // delete when unused
 		true,  // exclusive
 		false, // no-wait
-		nil,   // arguments
+		nil,   // args
 	)
-
 	if err != nil {
-		log.Fatalf("Failed to declare a queue: %v", err)
-		panic(err)
+		log.Fatalf("Failed to declare reply queue: %v", err)
 	}
 
 	msgs, err := ch.Consume(
-		q.Name, // queue
-		"",     // consumer
-		true,   // auto-ack
-		false,  // exclusive
-		false,  // no-local
-		false,  // no-wait
-		nil,    // args
+		replyQueue.Name, // queue
+		"",              // consumer
+		true,            // auto-ack
+		false,           // exclusive
+		false,           // no-local
+		false,           // no-wait
+		nil,             // args
 	)
-
 	if err != nil {
 		log.Fatalf("Failed to register a consumer: %v", err)
-		panic(err)
 	}
 
-	fmt.Println(q)
 	log.Println("Client started, define a number of sensors: ")
-
 	var number int
 	fmt.Scanln(&number)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	corrID := randomString(32)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+
+	startTime := time.Now()
 
 	err = ch.PublishWithContext(ctx,
 		"",            // exchange
 		"sensor_data", // routing key
-		false,         // mandatory
-		false,         // immediate
+		false,
+		false,
 		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        []byte(fmt.Sprintf("%d", number)),
+			ContentType:   "text/plain",
+			CorrelationId: corrID,
+			ReplyTo:       replyQueue.Name,
+			Body:          []byte(fmt.Sprintf("%d", number)),
 		},
 	)
 	if err != nil {
-		log.Fatalf("Failed to publish a message: %v", err)
-		panic(err)
+		log.Fatalf("Failed to publish: %v", err)
 	}
 
-	// Start consuming messages
-	go func() {
-		for d := range msgs {
-			bodyStr := string(d.Body)
-			log.Printf("Received message: %s", bodyStr)
+	for d := range msgs {
+		if d.CorrelationId == corrID {
+			log.Printf("Response: "+string(d.Body)+"\n RTT: %d ms",
+				time.Since(startTime).Milliseconds())
+			break
 		}
-	}()
-
-	log.Printf("Message sent to queue: %s", q.Name)
+	}
 }
